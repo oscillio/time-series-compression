@@ -152,24 +152,26 @@ namespace oscill {
 			m_num_bits_available -= num_bits;
 			return true;
 		}
-		SingleTimeSeries::SingleTimeSeries(const double precision, const int decimal_places, const int time_precision_decimal_places, const double min, const double max)
-			: m_precision(precision), m_min(min), m_max(max), m_bit_size(0)
+		SingleTimeSeries::SingleTimeSeries(const double precision, const int decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max)
+			: m_precision(precision), m_min(min), m_max(max), m_bit_size(0), m_time_precision_nanoseconds_pow(time_precision_nanoseconds_pow)
 		{
 			m_base_precision = precision;
-			m_precision = round(precision * (10 * decimal_places));
+			m_precision = (int)round(precision * (10 * decimal_places));
 			m_decimal_places = decimal_places;
 			m_bit_size = NumberOfBits(precision, min, max);
 			
 
 			// The lowest precision we can handle is nanoseconds
-			assert(time_precision_decimal_places <= 9);
+			assert(time_precision_nanoseconds_pow > 0);
+		
+			
 
 			// We want to divide the time amount so that we are only storing the bits that
 			// are relevant.  Example is if I ony care about 10th of a second I should be dividing
 			// the time values entered by 10^8 to get a much smaller value than if I cared about 
 			// 10 nanoseconds in which case I would only divide by 10
-			m_time_precision_divisor = 1000000000 / pow(10, time_precision_decimal_places);
-			m_time_decimal_places = time_precision_decimal_places;
+			m_time_precision_divisor = (uint64_t)pow(10, time_precision_nanoseconds_pow - 1);
+
 		}
 		int SingleTimeSeries::NumberOfBits(const double precision, const double min, const double max)
 		{
@@ -214,21 +216,15 @@ namespace oscill {
 			
 			return true;
 		}
-		bool SingleTimeSeriesWriteBuffer::m_AddTimeStamp(int64_t timestamp, bool first)
+		bool SingleTimeSeriesWriteBuffer::m_AddTimeStamp(uint64_t timestamp, bool first)
 		{
 			// TODO - Should we add some sort of configuration to round up or down.  For now, always
 			// round to the closest value
 
 			// Convert the time to an appropriate value based upon our specified timestamp precision
 			uint64_t timestamp_to_precision = 0;
-			if ( m_time_precision_divisor != 9 )
-			{
-				timestamp_to_precision = round(timestamp / (double)(m_time_precision_divisor));
-			}
-			else
-			{
-				timestamp_to_precision = timestamp;
-			}
+			double temp_val = timestamp / (double)m_time_precision_divisor;
+			timestamp_to_precision = (int64_t)round(temp_val);
 
 			if (first)
 			{	
@@ -244,7 +240,7 @@ namespace oscill {
 			}
 
 			// Check to see if our delta changed
-			int64_t delta = timestamp - m_previous_timestamp;
+			int64_t delta = timestamp_to_precision - m_previous_timestamp;
 			int64_t delta_of_delta = delta - m_previous_delta;
 			
 
@@ -385,8 +381,10 @@ namespace oscill {
 				// delta to our default value
 				if ( num_ones == 5)
 				{
-					if (!ReadNextBits(time, k_timestamp_size)) return false;
-					m_previous_timestamp = *time;
+					uint64_t time_bits = 0;
+					if (!ReadNextBits(&time_bits, k_timestamp_size)) return false;
+					m_previous_timestamp = *(int64_t *)&time_bits;
+					*time = m_previous_timestamp;
 					m_previous_delta = k_default_delta;
 					*time = *time * m_time_precision_divisor;
 					return true;
