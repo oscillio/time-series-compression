@@ -123,7 +123,7 @@ namespace oscill {
 
 				static constexpr uint32_t k_full_timestamp = 0x1F;
 				static constexpr uint32_t k_timestamp_size = 64;
-				static constexpr uint32_t k_default_delta = 1000;
+				static constexpr uint32_t k_default_delta = 10;
 
 				size_t m_bit_size;
 				uint64_t m_previous_timestamp;

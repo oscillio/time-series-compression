@@ -16,7 +16,7 @@ namespace oscill {
 			{0x3F, 7, 2, 2},
         	{0xFF, 9, 6, 3},
         	{0x7FF, 12, 14, 4},
-        	{0x7FFFFFFF, 32, 15, 4}
+        	{0x7FFFFFFF, 32, 30, 5}
 		};
 		
 
@@ -160,17 +160,11 @@ namespace oscill {
 			m_decimal_places = decimal_places;
 			m_bit_size = NumberOfBits(precision, min, max);
 			
-
-			// The lowest precision we can handle is nanoseconds
-			assert(time_precision_nanoseconds_pow > 0);
-		
-			
-
 			// We want to divide the time amount so that we are only storing the bits that
 			// are relevant.  Example is if I ony care about 10th of a second I should be dividing
 			// the time values entered by 10^8 to get a much smaller value than if I cared about 
 			// 10 nanoseconds in which case I would only divide by 10
-			m_time_precision_divisor = (uint64_t)pow(10, time_precision_nanoseconds_pow - 1);
+			m_time_precision_divisor = (uint64_t)pow(10, m_time_precision_nanoseconds_pow);
 
 		}
 		int SingleTimeSeries::NumberOfBits(const double precision, const double min, const double max)
@@ -223,8 +217,31 @@ namespace oscill {
 
 			// Convert the time to an appropriate value based upon our specified timestamp precision
 			uint64_t timestamp_to_precision = 0;
-			double temp_val = timestamp / (double)m_time_precision_divisor;
-			timestamp_to_precision = (int64_t)round(temp_val);
+			timestamp_to_precision = timestamp / m_time_precision_divisor;
+
+			// Do our own rounding.  Rounding messes up at bounds of an uint64_t.  We also want to ensure that 
+			// we are round up to the nearest second instead of truncating.  If we care about time stamp precision to 
+			// the second, 1.999 is most likey 2 seconds with some jitter than it is 1 seconds with a lot of jitter.  In 
+			// the future we could make this tolerance configurable.
+			if (m_time_precision_nanoseconds_pow != 0)
+			{
+				uint64_t timestamp_to_more_precision = timestamp / (uint64_t)pow(10, m_time_precision_nanoseconds_pow - 1);
+				if (timestamp_to_precision != 0)
+				{
+					int time_fraction = timestamp_to_more_precision % timestamp_to_precision;
+					if (time_fraction >= 5)
+					{
+						timestamp_to_precision++;
+					}
+				}
+				else
+				{
+					if (timestamp_to_more_precision >= 5)
+					{
+						timestamp_to_precision++;
+					}
+				}
+			}
 
 			if (first)
 			{	
@@ -360,7 +377,7 @@ namespace oscill {
 			// If the next bit is 0, then 
 			if ( bit_value == 0)
 			{
-				*time = m_previous_timestamp + m_previous_delta;
+				m_previous_timestamp = m_previous_timestamp + m_previous_delta;
 			}
 			else
 			{
@@ -391,21 +408,31 @@ namespace oscill {
 				}
 
 				// Read the number of bits based off of the pattern
+				bool sign_bit = false;
+				// Read the sign bit
+				if (!ReadNextBits(&bit_value, 1)) return false;
+				if (bit_value == 1)
+					sign_bit = true;
+
+
 				int index = num_ones - 1;
-				if (!ReadNextBits(&bit_value, timestamp_encoding_info[index].delta_size)) return false;
+				if (!ReadNextBits(&bit_value, timestamp_encoding_info[index].delta_size - 1)) return false;
 				// [0,255] becomes [-128,127]
-				int64_t encoded_delta = (int64_t)bit_value - ((int64_t)1 << (timestamp_encoding_info[index].delta_size - 1));
+				int64_t encoded_delta_of_delta = (int64_t)bit_value;// -((int64_t)1 << (timestamp_encoding_info[index].delta_size - 1));
 				
-				// [-128,127] becomes [-128,128] without the middle zero ( remembmer when we added it?)			
-				if ( encoded_delta >= 0)
+				if (sign_bit)
 				{
-					encoded_delta++;
+					encoded_delta_of_delta = encoded_delta_of_delta * -1;
 				}
-				*time = m_previous_timestamp + encoded_delta;
+
+				// [-128,127] becomes [-128,128] without the middle zero ( remembmer when we added it?)			
+				encoded_delta_of_delta++;
+				m_previous_delta = m_previous_delta + encoded_delta_of_delta;
+				m_previous_timestamp = m_previous_timestamp + m_previous_delta;
 			}
 
 			// Convert to the full time stamp using the specified time resolution
-			*time = *time * m_time_precision_divisor;
+			*time = m_previous_timestamp * m_time_precision_divisor;
 
 			return true;
 		}
