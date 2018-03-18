@@ -152,15 +152,13 @@ namespace oscill {
 			m_num_bits_available -= num_bits;
 			return true;
 		}
-		SingleTimeSeries::SingleTimeSeries(const double precision, const int decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max)
-			: m_precision(precision),m_bit_size(0), m_time_precision_nanoseconds_pow(time_precision_nanoseconds_pow), m_full_min(min), m_full_max(max)
+		SingleTimeSeries::SingleTimeSeries(const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max)
+			: m_bit_size(0), m_time_precision_nanoseconds_pow(time_precision_nanoseconds_pow), m_full_min(min), m_full_max(max)
 		{
-			m_base_precision = precision;
-			m_precision = (int)round(precision * pow(10,decimal_places));
-			m_decimal_places = decimal_places;
-			m_max = (int64_t)(((max)* pow(10, decimal_places)) / m_precision);
-			m_min = (int64_t)(((min)* pow(10, decimal_places)) / m_precision);
-			m_bit_size = NumberOfBits(precision, min, max);
+			m_decimal_places = precision_decimal_places;
+			m_max = (int64_t)((max)* pow(10, m_decimal_places));
+			m_min = (int64_t)((min)* pow(10, m_decimal_places));
+			m_bit_size = NumberOfBits();
 			
 			// We want to divide the time amount so that we are only storing the bits that
 			// are relevant.  Example is if I ony care about 10th of a second I should be dividing
@@ -169,10 +167,10 @@ namespace oscill {
 			m_time_precision_divisor = (uint64_t)pow(10, m_time_precision_nanoseconds_pow);
 
 		}
-		int SingleTimeSeries::NumberOfBits(const double precision, const double min, const double max)
+		int SingleTimeSeries::NumberOfBits()
 		{
 			int num_bits = 0;
-			uint64_t zeroed_value = (uint64_t)((max - min) / precision);
+			uint64_t zeroed_value = (uint64_t)((m_max - m_min) );
 
 			// Common algorithm. Keep dividing by 2 until we get 0.  A value of 0, will still take one bit to represent 
 			do
@@ -324,7 +322,7 @@ namespace oscill {
 				value = m_full_min;
 			}
 			// Get binary representation with the designated precision / precsion
-			int64_t value_to_write = (int64_t)(((value) * pow(10,m_decimal_places)) / m_precision);
+			int64_t value_to_write = (int64_t)((value) * pow(10,m_decimal_places));
 			value_to_write -= m_min;
 
 
@@ -459,7 +457,7 @@ namespace oscill {
 			{
 				if (!ReadNextBits(&bit_value, m_bit_size)) return false;
 				
-				m_last_value = ((((int64_t)bit_value + m_min) * m_precision) / pow(10,m_decimal_places));
+				m_last_value = ((((int64_t)bit_value + m_min)) / pow(10,m_decimal_places));
 				*value = m_last_value;
 			}
 			return true;

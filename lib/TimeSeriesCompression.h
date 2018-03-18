@@ -110,16 +110,14 @@ namespace oscill {
 		class SingleTimeSeries 
 		{
 			public:
-				SingleTimeSeries(const double precision, const int decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max);
+				SingleTimeSeries(const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max);
 				virtual ~SingleTimeSeries() {}
 			protected:
-				double m_base_precision;
 				int m_decimal_places;
 				int64_t m_min;
 				int64_t m_max;
 				double m_full_min;
 				double m_full_max;
-				double m_precision;
 				uint64_t m_time_precision_divisor;
 				int m_time_precision_nanoseconds_pow;
 
@@ -133,15 +131,15 @@ namespace oscill {
 				
 			
 				// Helper Function to determine max bit size of value
-				int NumberOfBits(const double precision, const double min, const double max);
+				int NumberOfBits();
 		};
 		class SingleTimeSeriesWriteBuffer : public SingleTimeSeries, public WriteByteBuffer
 		{
 			
 		public:
 			// TODO - Get the decmial places based off the precision specified.
-			SingleTimeSeriesWriteBuffer(const double precision, const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max, size_t size) :
-				WriteByteBuffer(size), SingleTimeSeries(precision, precision_decimal_places, time_precision_nanoseconds_pow, min, max)
+			SingleTimeSeriesWriteBuffer(const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max, size_t size) :
+				WriteByteBuffer(size), SingleTimeSeries(precision_decimal_places, time_precision_nanoseconds_pow, min, max)
 			{}
 			virtual ~SingleTimeSeriesWriteBuffer() {}
 			bool AddValue(TimeSeriesValue ts_value);
@@ -157,11 +155,11 @@ namespace oscill {
 		class SingleTimeSeriesReadBuffer : public SingleTimeSeries, public ReadByteBuffer
 		{
 		public:
-			SingleTimeSeriesReadBuffer(const double precision, const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max, void *data, size_t size) :
-				ReadByteBuffer(data, size), SingleTimeSeries(precision, precision_decimal_places, time_precision_nanoseconds_pow, min, max)
+			SingleTimeSeriesReadBuffer(const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max, void *data, size_t size) :
+				ReadByteBuffer(data, size), SingleTimeSeries(precision_decimal_places, time_precision_nanoseconds_pow, min, max)
 			{}
 			SingleTimeSeriesReadBuffer(SingleTimeSeriesWriteBuffer& write_buffer) : ReadByteBuffer(write_buffer.RawData(), write_buffer.Size()), 
-				SingleTimeSeries(write_buffer.m_base_precision, write_buffer.m_decimal_places, write_buffer.m_time_precision_nanoseconds_pow, write_buffer.m_full_min, write_buffer.m_full_max)
+				SingleTimeSeries(write_buffer.m_decimal_places, write_buffer.m_time_precision_nanoseconds_pow, write_buffer.m_full_min, write_buffer.m_full_max)
 			{
 
 			}

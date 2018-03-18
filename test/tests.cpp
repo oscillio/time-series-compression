@@ -20,7 +20,6 @@ struct TestTimeValue
 struct TestTimeValues
 {
 	std::vector<TestTimeValue> values;
-	double value_precision;
 	int value_precision_decimal_places;
 	int time_precision_log;
 	double minimum; 
@@ -32,8 +31,33 @@ int main()
 	std::vector<uint8_t> test_buffer(1024);
 	
 	// 1000000 time stamp accuracy, 0.1f value accuracy
-	std::vector<TestTimeValues> test_values;
-	/*{
+	std::vector<TestTimeValues> test_values
+	{
+		{
+			// Vector of expected values
+			{
+				{
+					// Set
+					{ 1000000, 10.673 },
+					// Expected
+					{ 1000000, 10.0 }
+				},
+				{
+					// Set
+					{ 500000, 239.788 },
+					// Expected
+					{ 500000, 230.0 }
+				}
+			},
+		// Value precision decimal places
+		-1,
+		// Time Precision ^10
+		5,
+		// Minimum
+		-1000.0f,
+		// Maximum
+		1000.0f
+		},
 		{
 			// Vector of expected values
 			{
@@ -56,8 +80,6 @@ int main()
 					{ 1422568543753000000, -68710.714 }
 				}
 			},
-		// Value precision
-		0.001f,
 		// Value precision decimal places
 		3,
 		// Time Precision ^10
@@ -125,8 +147,6 @@ int main()
 					{ 1422568543752950000, 10.6 }
 				}
 			},
-		// Value precision
-		0.1f,
 		// Value precision decimal places
 		1,
 		// Time Precision ^10
@@ -139,7 +159,7 @@ int main()
 		
 
 	};
-	*/
+	
 	// Push some randomness into the test vectors
 	
 
@@ -156,7 +176,6 @@ int main()
 		random_to_add.maximum = dis2(gen);
 		random_to_add.minimum = random_to_add.maximum - dis2(gen);
 		random_to_add.time_precision_log = 0;
-		random_to_add.value_precision = 0.01;
 		random_to_add.value_precision_decimal_places = 3;
 		std::uniform_real_distribution<double> fis(random_to_add.minimum - 100, random_to_add.maximum + 100);
 
@@ -202,15 +221,12 @@ int main()
 	for (auto&& test : test_values)
 	{
 
-		oscill::io::SingleTimeSeriesWriteBuffer test_oscillio_write_buff(test.value_precision, test.value_precision_decimal_places, test.time_precision_log, test.minimum, test.maximum, BUFFER_SIZE);
+		oscill::io::SingleTimeSeriesWriteBuffer test_oscillio_write_buff(test.value_precision_decimal_places, test.time_precision_log, test.minimum, test.maximum, BUFFER_SIZE);
 
 		for (auto&& value : test.values)
 		{
 			assert(test_oscillio_write_buff.AddValue(value.set) != false);
 		}
-		cout << "Normal " << test.values.size() * 64 * 2 << " bits" << std::endl;
-		auto written_bytes = test_oscillio_write_buff.ByteCount();
-		cout << "Optimized " << written_bytes * 8 << " bits" << std::endl;
 	
 		oscill::io::SingleTimeSeriesReadBuffer test_oscillio_read_buff(test_oscillio_write_buff);
 
