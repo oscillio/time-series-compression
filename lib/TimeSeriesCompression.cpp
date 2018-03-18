@@ -153,11 +153,13 @@ namespace oscill {
 			return true;
 		}
 		SingleTimeSeries::SingleTimeSeries(const double precision, const int decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max)
-			: m_precision(precision), m_min(min), m_max(max), m_bit_size(0), m_time_precision_nanoseconds_pow(time_precision_nanoseconds_pow)
+			: m_precision(precision),m_bit_size(0), m_time_precision_nanoseconds_pow(time_precision_nanoseconds_pow), m_full_min(min), m_full_max(max)
 		{
 			m_base_precision = precision;
-			m_precision = (int)round(precision * (10 * decimal_places));
+			m_precision = (int)round(precision * pow(10,decimal_places));
 			m_decimal_places = decimal_places;
+			m_max = (int64_t)(((max)* pow(10, decimal_places)) / m_precision);
+			m_min = (int64_t)(((min)* pow(10, decimal_places)) / m_precision);
 			m_bit_size = NumberOfBits(precision, min, max);
 			
 			// We want to divide the time amount so that we are only storing the bits that
@@ -228,7 +230,7 @@ namespace oscill {
 				uint64_t timestamp_to_more_precision = timestamp / (uint64_t)pow(10, m_time_precision_nanoseconds_pow - 1);
 				if (timestamp_to_precision != 0)
 				{
-					int time_fraction = timestamp_to_more_precision % timestamp_to_precision;
+					uint64_t time_fraction = timestamp_to_more_precision % timestamp_to_precision;
 					if (time_fraction >= 5)
 					{
 						timestamp_to_precision++;
@@ -311,16 +313,20 @@ namespace oscill {
 		}
 		bool SingleTimeSeriesWriteBuffer::m_AddValue(double value, bool first)
 		{
-			// If we are above the maximum, set it to the maximum. 
-			// TODO - Print out an error message or have some means to denote we exceeded maximum
-			if (value > m_max)
+			// If we are above the maximum, set it to the maximum.
+			if (value > m_full_max)
 			{
-				value = m_max;
+				value = m_full_max;
 			}
-
-
+			// If we are below the minimum, set it to the minimum. 
+			if (value < m_full_min)
+			{
+				value = m_full_min;
+			}
 			// Get binary representation with the designated precision / precsion
-			uint64_t value_to_write = (uint64_t)(((value - m_min) * (10 * m_decimal_places)) / m_precision);
+			int64_t value_to_write = (int64_t)(((value) * pow(10,m_decimal_places)) / m_precision);
+			value_to_write -= m_min;
+
 
 			if (first)
 			{
@@ -452,7 +458,8 @@ namespace oscill {
 			else
 			{
 				if (!ReadNextBits(&bit_value, m_bit_size)) return false;
-				m_last_value = (bit_value * m_precision) / (10 * m_decimal_places) + m_min;
+				
+				m_last_value = ((((int64_t)bit_value + m_min) * m_precision) / pow(10,m_decimal_places));
 				*value = m_last_value;
 			}
 			return true;

@@ -115,8 +115,10 @@ namespace oscill {
 			protected:
 				double m_base_precision;
 				int m_decimal_places;
-				double m_min;
-				double m_max;
+				int64_t m_min;
+				int64_t m_max;
+				double m_full_min;
+				double m_full_max;
 				double m_precision;
 				uint64_t m_time_precision_divisor;
 				int m_time_precision_nanoseconds_pow;
@@ -159,7 +161,7 @@ namespace oscill {
 				ReadByteBuffer(data, size), SingleTimeSeries(precision, precision_decimal_places, time_precision_nanoseconds_pow, min, max)
 			{}
 			SingleTimeSeriesReadBuffer(SingleTimeSeriesWriteBuffer& write_buffer) : ReadByteBuffer(write_buffer.RawData(), write_buffer.Size()), 
-				SingleTimeSeries(write_buffer.m_base_precision, write_buffer.m_decimal_places, write_buffer.m_time_precision_nanoseconds_pow, write_buffer.m_min, write_buffer.m_max)
+				SingleTimeSeries(write_buffer.m_base_precision, write_buffer.m_decimal_places, write_buffer.m_time_precision_nanoseconds_pow, write_buffer.m_full_min, write_buffer.m_full_max)
 			{
 
 			}
