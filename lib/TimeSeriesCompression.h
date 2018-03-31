@@ -3,15 +3,62 @@
 #include <memory>
 #include <iterator>
 #include <vector>
+#include <string>
+#include <unordered_map>
 
 namespace oscill {
 	namespace io {
-		struct TimeSeriesValue
+		// Information about a value.  Will be written into the files header
+		// so that it can be read out correctly
+		struct ValueTypeDefinition
+		{
+			// Can be empty string if it doesn't matter.
+			std::string label;
+			int precision_decimal_places;
+			double min;
+			double max;
+		};
+
+		// Information about a value's antecedent so that we can determine the correct value
+		// to return at any given point in time
+		struct ValueMetrics
+		{
+			struct ValueTypeDefinition definition;
+			bool first_value = false;
+			int id;
+			int64_t precise_min;
+			int64_t precise_max;
+			uint64_t m_last_value;
+			size_t m_bit_size;
+		};
+
+		// Metrics about the current time value
+		struct TimeMetrics
+		{
+			int time_precision_nanoseconds_pow;
+			uint64_t time_precision_divisor;
+			static constexpr uint32_t k_full_timestamp = 0x1F;
+			static constexpr uint32_t k_timestamp_size = 64;
+			static constexpr uint32_t k_default_delta = 10;
+			uint64_t previous_timestamp;
+			uint64_t previous_delta;
+		};
+
+
+		struct SingleTimeSeriesValue
 		{
 			// Unix Time in Nanoseconds
 			uint64_t time;
 			// Value
 			double value;
+		};
+		typedef std::pair< std::string, double> labeled_value ;
+		struct LabeledTimeSeriesValues
+		{
+			// Unix Time in Nanoseconds
+			uint64_t time;
+			// Tuple list containing values and their labels
+			std::vector< labeled_value > labeled_values;
 		};
 
 		class ByteBuffer
@@ -106,7 +153,7 @@ namespace oscill {
 			ReadByteBuffer& operator = (const ByteBuffer& other) {return *this;}
 			ReadByteBuffer(const ByteBuffer & other) {/* do nothing */ }
 		};
-
+		
 		class SingleTimeSeries 
 		{
 			public:
@@ -128,25 +175,21 @@ namespace oscill {
 				size_t m_bit_size;
 				uint64_t m_previous_timestamp;
 				uint64_t m_previous_delta;
-				
-			
-				// Helper Function to determine max bit size of value
-				int NumberOfBits();
 		};
 		class SingleTimeSeriesWriteBuffer : public SingleTimeSeries, public WriteByteBuffer
 		{
 			
 		public:
-			// TODO - Get the decmial places based off the precision specified.
 			SingleTimeSeriesWriteBuffer(const int precision_decimal_places, const int time_precision_nanoseconds_pow, const double min, const double max, size_t size) :
 				WriteByteBuffer(size), SingleTimeSeries(precision_decimal_places, time_precision_nanoseconds_pow, min, max)
 			{}
 			virtual ~SingleTimeSeriesWriteBuffer() {}
-			bool AddValue(TimeSeriesValue ts_value);
-			bool AddValues(std::vector<TimeSeriesValue> values, size_t *values_added);
+			virtual bool AddValue(SingleTimeSeriesValue ts_value);
+			virtual bool AddValues(std::vector<SingleTimeSeriesValue> values, size_t *values_added);
 		protected:
 			bool m_AddTimeStamp(uint64_t timestamp, bool first);
 			bool m_AddValue(double value, bool first);
+
 
 			bool m_first_value = true;
 			uint64_t m_last_value = 0;
@@ -164,13 +207,68 @@ namespace oscill {
 
 			}
 			virtual ~SingleTimeSeriesReadBuffer() {}
-			bool ReadNext(TimeSeriesValue *ts_value);
-			std::vector<TimeSeriesValue> ReadAll();
-			void ReadAll(std::vector<TimeSeriesValue> *buffer);
+			bool ReadNext(SingleTimeSeriesValue *ts_value);
+			std::vector<SingleTimeSeriesValue> ReadAll();
+			void ReadAll(std::vector<SingleTimeSeriesValue> *buffer);
 		protected:
 			bool m_ReadNextValue(double *value);
 			bool m_ReadNextTime(uint64_t *time);
 			double m_last_value;
+
+		};
+
+		class MultipleTimeSeriesWriteBuffer : public WriteByteBuffer
+		{
+			public:
+				MultipleTimeSeriesWriteBuffer(const int time_precision_nanoseconds_pow, std::vector<ValueTypeDefinition> definitions, size_t size);
+				virtual ~MultipleTimeSeriesWriteBuffer(){}
+				virtual bool AddValue(LabeledTimeSeriesValues ts_value);
+				virtual bool AddValues(std::vector<LabeledTimeSeriesValues> values, size_t *values_added);
+			protected:
+				bool mAddTimeStamp(uint64_t timestamp, bool first);
+				bool mAddValue(ValueMetrics metrics, double value);
+				bool mInit();
+			private:	
+				/***** 		TIME METRIC INFORMATION    ******/
+				int m_time_precision_nanoseconds_pow;
+				uint64_t m_time_precision_divisor;
+				static constexpr uint32_t k_full_timestamp = 0x1F;
+				static constexpr uint32_t k_timestamp_size = 64;
+				static constexpr uint32_t k_default_delta = 10;
+				uint64_t m_previous_timestamp;
+				uint64_t m_previous_delta;
+				/****** END TIME METRIC INFORMATION *********/
+
+				bool m_first_time = true;
+				int m_last_data_type_id;
+				std::vector<ValueTypeDefinition> m_definitions;
+				std::vector<ValueMetrics> m_metrics;
+				std::unordered_map<std::string, ValueMetrics> m_label_to_metrics;
+		};
+
+
+		class MultipleTimeSeriesReadBuffer : public ReadByteBuffer
+		{
+		public:
+			MultipleTimeSeriesReadBuffer(void *data, size_t size) : ReadByteBuffer(data, size),
+			m_last_data_type_id(0)
+			{
+				m_time_metrics.previous_delta = m_time_metrics.previous_timestamp = m_time_metrics.time_precision_divisor = m_time_metrics.time_precision_nanoseconds_pow = 0;
+			}
+			virtual ~MultipleTimeSeriesReadBuffer() {}
+			bool ReadNext(LabeledTimeSeriesValues *ts_value);
+		protected:
+			bool mInit();
+			bool m_ReadNextValue(std::vector<labeled_value> *value);
+			bool m_ReadNextTime(uint64_t *time);
+
+		private:
+			bool m_first_time = true;
+			int m_last_data_type_id;
+			TimeMetrics m_time_metrics;
+			int m_data_type_label_size = 0;
+			std::vector<ValueMetrics> m_metrics;
+			std::unordered_map<std::string, ValueMetrics> m_label_to_metrics;
 
 		};
 
